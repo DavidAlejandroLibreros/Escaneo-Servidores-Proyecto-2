@@ -23,13 +23,12 @@ class EscanerPuertos:
 
     def escanear_en_vivo(self, al_encontrar_puerto):
         proceso = subprocess.Popen(
-            ["nmap", "-v", "-p", self.puertos, self.host],
+            ["nmap", "-v", "-sS", "-sU", "-p", self.puertos, self.host],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
         )
-        
 
         patron = re.compile(r"Discovered open port (\d+)/(\w+) on")
 
@@ -41,11 +40,11 @@ class EscanerPuertos:
                 al_encontrar_puerto(detalle)
 
         proceso.wait()
-        
 
     def _escanear_detalle(self, puerto: str, protocolo: str) -> str:
         scanner = nmap.PortScanner()
-        scanner.scan(self.host, puerto, arguments="-sV -sC")
+        argumentos = "-sU -sV" if protocolo == "udp" else "-sV -sC"
+        scanner.scan(self.host, puerto, arguments=argumentos)
 
         if not scanner.all_hosts():
             return f"Puerto {puerto}/{protocolo}: open (no se pudo obtener el detalle)"
@@ -58,10 +57,18 @@ class EscanerPuertos:
         version = datos.get("version", "")
         extra = f" — {producto} {version}".strip() if producto else ""
 
+        metodo = datos.get("method", "table")
+        confianza = datos.get("conf", "0")
+        certeza = (
+            f"confirmado, confianza {confianza}/10"
+            if metodo == "probed"
+            else "supuesto por el número de puerto"
+        )
+
         scripts = datos.get("script", {})
         lineas_extra = [f"    {nombre}: {salida.strip()}" for nombre, salida in scripts.items()]
 
-        resultado = f"Puerto {puerto}/{protocolo}: open ({servicio}{extra})"
+        resultado = f"Puerto {puerto}/{protocolo}: open ({servicio}{extra}) [{certeza}]"
         if lineas_extra:
             resultado += "\n" + "\n".join(lineas_extra)
 
