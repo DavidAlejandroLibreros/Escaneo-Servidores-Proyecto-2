@@ -41,38 +41,31 @@ class EscanerPuertos:
 
         proceso.wait()
 
-    def _escanear_detalle(self, puerto: str, protocolo: str) -> str:
+    def _escanear_detalle(self, puerto: str, protocolo: str) -> dict:
         scanner = nmap.PortScanner()
         argumentos = "-sU -sV" if protocolo == "udp" else "-sV -sC"
         scanner.scan(self.host, puerto, arguments=argumentos)
 
         if not scanner.all_hosts():
-            return f"Puerto {puerto}/{protocolo}: open (no se pudo obtener el detalle)"
+            return {
+                "puerto": puerto, "protocolo": protocolo, "servicio": "desconocido",
+                "producto": "", "version": "", "confirmado": False,
+                "confianza": "0", "scripts": {},
+            }
 
         host_real = scanner.all_hosts()[0]
         datos = scanner[host_real][protocolo][int(puerto)]
 
-        servicio = datos.get("name", "desconocido")
-        producto = datos.get("product", "")
-        version = datos.get("version", "")
-        extra = f" — {producto} {version}".strip() if producto else ""
-
-        metodo = datos.get("method", "table")
-        confianza = datos.get("conf", "0")
-        certeza = (
-            f"confirmado, confianza {confianza}/10"
-            if metodo == "probed"
-            else "supuesto por el número de puerto"
-        )
-
-        scripts = datos.get("script", {})
-        lineas_extra = [f"    {nombre}: {salida.strip()}" for nombre, salida in scripts.items()]
-
-        resultado = f"Puerto {puerto}/{protocolo}: open ({servicio}{extra}) [{certeza}]"
-        if lineas_extra:
-            resultado += "\n" + "\n".join(lineas_extra)
-
-        return resultado
+        return {
+            "puerto": puerto,
+            "protocolo": protocolo,
+            "servicio": datos.get("name", "desconocido"),
+            "producto": datos.get("product", ""),
+            "version": datos.get("version", ""),
+            "confirmado": datos.get("method") == "probed",
+            "confianza": datos.get("conf", "0"),
+            "scripts": datos.get("script", {}),
+        }
 
     def detectar_sistema_operativo(self) -> str:
         scanner = nmap.PortScanner()
